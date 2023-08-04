@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dac-observer1
+spec:
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: dac-observer1
+  template:
+    metadata:
+      labels:
+        app: dac-observer1
+    spec:
+      containers:
+      - name: observer1
+        image: ghcr.io/marigold-dev/dac-baseimage:master_a78b70c7_20230724101956
+        command: ["/bin/bash", "/scripts/observer1.sh"]
+        env:
+        - name: WIPE_OBSERVER_1_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_OBSERVER_1_DIR
+        - name: WIPE_OBSERVER_1_REVEAL_DATA_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_OBSERVER_1_REVEAL_DATA_DIR
+        - name: WIPE_OBSERVER_1_OCTEZ_CLIENT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_OBSERVER_1_OCTEZ_CLIENT_DIR
+        - name: OCTEZ_CLIENT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: OCTEZ_CLIENT_DIR
+        - name: OBSERVER_1_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: OBSERVER_1_DIR
+        - name: OBSERVER_1_REVEAL_DATA_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: OBSERVER_1_REVEAL_DATA_DIR
+        - name: TEZOS_RPC
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: TEZOS_RPC
+        - name: ALIAS_ROLLUP_OPERATOR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_ROLLUP_OPERATOR
+        - name: ALIAS_MEMBER_1
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_MEMBER_1
+        - name: ALIAS_MEMBER_2
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_MEMBER_2
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 11121
+          initialDelaySeconds: 40
+          periodSeconds: 20
+          failureThreshold: 3
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        ports:
+        - containerPort: 11121
+          protocol: TCP
+          name: rpc
+        volumeMounts:
+        - name: dac-observer1-dir-volume
+          mountPath: /mounted_volume/dac/observer-1
+          readOnly: false
+        # this volume is shared with the rollup node:
+        - name: rollup-observer-shared-volume
+          mountPath: /mounted_volume_shared/dac/
+          readOnly: false
+        - name: dac-scripts-configmap
+          mountPath: /scripts
+          readOnly: true
+      volumes:
+      - name: dac-observer1-dir-volume
+        persistentVolumeClaim:
+          claimName: dac-observer1-dir-volume
+      - name: dac-scripts-configmap
+        configMap:
+          name: dac-scripts-configmap
+      - name: rollup-observer-shared-volume
+        persistentVolumeClaim:
+          claimName: dac-rollup-observer-shared-volume

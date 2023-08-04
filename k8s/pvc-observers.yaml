@@ -1,0 +1,32 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: dac-observer1-dir-volume
+spec:
+  storageClassName: "pd-ssd-retain"
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: dac-observer2-dir-volume
+spec:
+  storageClassName: "pd-ssd-retain"
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: dac-observer2-reveal-dir-volume
+spec:
+  storageClassName: "pd-ssd-retain"
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi

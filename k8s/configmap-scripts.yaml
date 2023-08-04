@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dac-scripts-configmap
+data:
+  import-addresses.sh: |
+    #!/bin/bash
+    set +x
+    # Import
+    ## note: beware of the way you manage secrets / private keys in Kubernetes!
+    octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} import secret key ${ALIAS_ROLLUP_OPERATOR} unencrypted:${EDSK_ROLLUP_OPERATOR} 2>&1 >/dev/null
+    octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls import secret key ${ALIAS_MEMBER_1} aggregate_unencrypted:${BLSK_MEMBER_1} 2>&1 >/dev/null
+    octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls import secret key ${ALIAS_MEMBER_2} aggregate_unencrypted:${BLSK_MEMBER_2} 2>&1 >/dev/null
+    # Print (make sure that private keys are not printed in logs when going to prod)
+    octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} list known addresses
+    octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls list keys
+    # Export env vars
+    export ROLLUP_OPERATOR=$(octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} show address ${ALIAS_ROLLUP_OPERATOR} | grep "Hash:" | awk '{print $2}') ; echo "ROLLUP_OPERATOR=$ROLLUP_OPERATOR"
+    export MEMBER1_PKH=$(octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls show address ${ALIAS_MEMBER_1} | grep "Hash:" | awk '{print $2}') ; echo "MEMBER1_PKH=$MEMBER1_PKH"
+    export MEMBER1_PK=$(octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls show address ${ALIAS_MEMBER_1} | grep "Public Key:" | awk '{print $3}') ; echo "MEMBER1_PK=$MEMBER1_PK"
+    export MEMBER2_PKH=$(octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls show address ${ALIAS_MEMBER_2} | grep "Hash:" | awk '{print $2}') ; echo "MEMBER2_PKH=$MEMBER2_PKH"
+    export MEMBER2_PK=$(octez-client -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} bls show address ${ALIAS_MEMBER_2} | grep "Public Key:" | awk '{print $3}') ; echo "MEMBER2_PK=$MEMBER2_PK"
+  coordinator.sh: |
+    #!/bin/bash
+    set -x
+    # Wipe dirs eventually:
+    if [[ $WIPE_COORDINATOR_DIR == *"YES"* ]] && [[ -d "$COORDINATOR_DIR" ]]; then
+      cd $COORDINATOR_DIR && rm -rf *
+    fi
+    if [[ $WIPE_COORDINATOR_REVEAL_DATA_DIR == *"YES"* ]] && [[ -d "$COORDINATOR_REVEAL_DATA_DIR" ]]; then
+      cd $COORDINATOR_REVEAL_DATA_DIR && rm -rf *
+    fi
+    if [[ $WIPE_COORDINATOR_OCTEZ_CLIENT_DIR == *"YES"* ]] && [[ -d "$OCTEZ_CLIENT_DIR" ]]; then
+      cd $OCTEZ_CLIENT_DIR && rm -rf *
+    fi
+    # Create dirs:
+    echo $OCTEZ_CLIENT_DIR
+    if [[ ! -d "$OCTEZ_CLIENT_DIR" ]]; then mkdir -p $OCTEZ_CLIENT_DIR ;fi
+    if [[ ! -d "$COORDINATOR_REVEAL_DATA_DIR" ]]; then mkdir -p $COORDINATOR_REVEAL_DATA_DIR ;fi
+    if [[ ! -d "$COORDINATOR_DIR" ]]; then mkdir -p $COORDINATOR_DIR ;fi
+    # Import addr:
+    ls -last /scripts
+    set +x && source /scripts/import-addresses.sh 2>&1 >/dev/null ; set -x
+    # Configure node:
+    TRILI_MEMBER_PK="BLpk1rNLTcT3Z6Y8ndq3Dw5XBiJSHuVsMSkn6nczbdt29WG3ksHRw14vy4KqwfMiedmmVYEYC2Nw"
+    octez-dac-node configure as coordinator with data availability committee members ${MEMBER1_PK} ${MEMBER2_PK} ${TRILI_MEMBER_PK} --data-dir ${COORDINATOR_DIR} --reveal-data-dir ${COORDINATOR_REVEAL_DATA_DIR} --rpc-addr 0.0.0.0 --rpc-port 11100
+    # Run node:
+    exec octez-dac-node -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} run --data-dir ${COORDINATOR_DIR}
+  member1.sh: |
+    #!/bin/bash
+    set -x
+    # Wipe dirs eventually:
+    if [[ $WIPE_MEMBER_1_DIR == *"YES"* ]] && [[ -d "$MEMBER_1_DIR" ]]; then
+      cd $MEMBER_1_DIR && rm -rf *
+    fi
+    if [[ $WIPE_MEMBER_1_REVEAL_DATA_DIR == *"YES"* ]] && [[ -d "$MEMBER_1_REVEAL_DATA_DIR" ]]; then
+      cd $MEMBER_1_REVEAL_DATA_DIR && rm -rf *
+    fi
+    if [[ $WIPE_MEMBER_1_OCTEZ_CLIENT_DIR == *"YES"* ]] && [[ -d "$OCTEZ_CLIENT_DIR" ]]; then
+      cd $OCTEZ_CLIENT_DIR && rm -rf *
+    fi
+    # Create dirs:
+    if [[ ! -d "$OCTEZ_CLIENT_DIR" ]]; then mkdir -p $OCTEZ_CLIENT_DIR ;fi
+    if [[ ! -d "$MEMBER_1_DIR" ]]; then mkdir -p $MEMBER_1_DIR ;fi
+    if [[ ! -d "$MEMBER_1_REVEAL_DATA_DIR" ]]; then mkdir -p $MEMBER_1_REVEAL_DATA_DIR ;fi
+    # Import addr:
+    ls -last /scripts
+    set +x && source /scripts/import-addresses.sh 2>&1 >/dev/null ; set -x
+    # Wait a bit
+    sleep 15
+    # Configure node
+    octez-dac-node configure as committee member with coordinator https://dac-ghost-coordinator.gcp.marigold.dev and signer ${MEMBER1_PKH} --data-dir ${MEMBER_1_DIR} --reveal-data-dir ${MEMBER_1_REVEAL_DATA_DIR} --rpc-addr 0.0.0.0 --rpc-port 11111
+    # Run node
+    exec octez-dac-node -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} run --data-dir ${MEMBER_1_DIR}
+  member2.sh: |
+    #!/bin/bash
+    set -x
+    # Wipe dirs eventually:
+    if [[ $WIPE_MEMBER_2_DIR == *"YES"* ]] && [[ -d "$MEMBER_2_DIR" ]]; then
+      cd $MEMBER_2_DIR && rm -rf *
+    fi
+    if [[ $WIPE_MEMBER_2_REVEAL_DATA_DIR == *"YES"* ]] && [[ -d "$MEMBER_2_REVEAL_DATA_DIR" ]]; then
+      cd $MEMBER_2_REVEAL_DATA_DIR && rm -rf *
+    fi
+    if [[ $WIPE_MEMBER_2_OCTEZ_CLIENT_DIR == *"YES"* ]] && [[ -d "$OCTEZ_CLIENT_DIR" ]]; then
+      cd $OCTEZ_CLIENT_DIR && rm -rf *
+    fi
+    # Create dirs:
+    if [[ ! -d "$OCTEZ_CLIENT_DIR" ]]; then mkdir -p $OCTEZ_CLIENT_DIR ;fi
+    if [[ ! -d "$MEMBER_2_DIR" ]]; then mkdir -p $MEMBER_2_DIR ;fi
+    if [[ ! -d "$MEMBER_2_REVEAL_DATA_DIR" ]]; then mkdir -p $MEMBER_2_REVEAL_DATA_DIR ;fi
+    # Import addr:
+    ls -last /scripts
+    set +x && source /scripts/import-addresses.sh 2>&1 >/dev/null ; set -x
+    # Wait a bit
+    sleep 25
+    # Configure node
+    echo "MEMBER2_PKH=$MEMBER2_PKH"
+    octez-dac-node configure as committee member with coordinator https://dac-ghost-coordinator.gcp.marigold.dev and signer ${MEMBER2_PKH} --data-dir ${MEMBER_2_DIR} --reveal-data-dir ${MEMBER_2_REVEAL_DATA_DIR} --rpc-addr 0.0.0.0 --rpc-port 11112
+    # Run node
+    exec octez-dac-node -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} run --data-dir ${MEMBER_2_DIR}
+  observer1.sh: |
+    #!/bin/bash
+    set -x
+    # Wipe dirs eventually:
+    if [[ $WIPE_OBSERVER_1_DIR == *"YES"* ]] && [[ -d "$OBSERVER_1_DIR" ]]; then
+      cd $OBSERVER_1_DIR && rm -rf *
+    fi
+    if [[ $WIPE_OBSERVER_1_REVEAL_DATA_DIR == *"YES"* ]] && [[ -d "$OBSERVER_1_REVEAL_DATA_DIR" ]]; then
+      cd $OBSERVER_1_REVEAL_DATA_DIR && rm -rf *
+    fi
+    if [[ $WIPE_OBSERVER_1_OCTEZ_CLIENT_DIR == *"YES"* ]] && [[ -d "$OCTEZ_CLIENT_DIR" ]]; then
+      cd $OCTEZ_CLIENT_DIR && rm -rf *
+    fi
+    # Create dirs:
+    if [[ ! -d "$OCTEZ_CLIENT_DIR" ]]; then mkdir -p $OCTEZ_CLIENT_DIR ;fi
+    if [[ ! -d "$OBSERVER_1_DIR" ]]; then mkdir -p $OBSERVER_1_DIR ;fi
+    if [[ ! -d "$OBSERVER_1_REVEAL_DATA_DIR" ]]; then mkdir -p $OBSERVER_1_REVEAL_DATA_DIR ;fi
+    # Import addr:
+    ls -last /scripts
+    set +x && source /scripts/import-addresses.sh 2>&1 >/dev/null ; set -x
+    # Wait a bit
+    sleep 35
+    # Configure node
+    octez-dac-node configure as observer with coordinator https://dac-ghost-coordinator.gcp.marigold.dev and committee member rpc addresses https://dac-ghost-member1.gcp.marigold.dev https://dac-ghost-member2.gcp.marigold.dev --data-dir ${OBSERVER_1_DIR} --reveal-data-dir ${OBSERVER_1_REVEAL_DATA_DIR} --rpc-addr 0.0.0.0 --rpc-port 11121
+    # Run node
+    exec octez-dac-node -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} run --data-dir ${OBSERVER_1_DIR}
+  observer2.sh: |
+    #!/bin/bash
+    set -x
+    # Wipe dirs eventually:
+    if [[ $WIPE_OBSERVER_2_DIR == *"YES"* ]] && [[ -d "$OBSERVER_2_DIR" ]]; then
+      cd $OBSERVER_2_DIR && rm -rf *
+    fi
+    if [[ $WIPE_OBSERVER_2_REVEAL_DATA_DIR == *"YES"* ]] && [[ -d "$OBSERVER_2_REVEAL_DATA_DIR" ]]; then
+      cd $OBSERVER_2_REVEAL_DATA_DIR && rm -rf *
+    fi
+    if [[ $WIPE_OBSERVER_2_OCTEZ_CLIENT_DIR == *"YES"* ]] && [[ -d "$OCTEZ_CLIENT_DIR" ]]; then
+      cd $OCTEZ_CLIENT_DIR && rm -rf *
+    fi
+    # Create dirs:
+    if [[ ! -d "$OCTEZ_CLIENT_DIR" ]]; then mkdir -p $OCTEZ_CLIENT_DIR ;fi
+    if [[ ! -d "$OBSERVER_2_DIR" ]]; then mkdir -p $OBSERVER_2_DIR ;fi
+    if [[ ! -d "$OBSERVER_2_REVEAL_DATA_DIR" ]]; then mkdir -p $OBSERVER_2_REVEAL_DATA_DIR ;fi
+    # Import addr:
+    ls -last /scripts
+    set +x && source /scripts/import-addresses.sh 2>&1 >/dev/null ; set -x
+    # Wait a bit
+    sleep 45
+    # Configure node
+    octez-dac-node configure as observer with coordinator https://dac-ghost-coordinator.gcp.marigold.dev and committee member rpc addresses https://dac-ghost-member1.gcp.marigold.dev https://dac-ghost-member2.gcp.marigold.dev --data-dir ${OBSERVER_2_DIR} --reveal-data-dir ${OBSERVER_2_REVEAL_DATA_DIR} --rpc-addr 0.0.0.0 --rpc-port 11122
+    # Run node
+    exec octez-dac-node -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} run --data-dir ${OBSERVER_2_DIR}
+  rollup.sh: |
+    #!/bin/bash
+    set -x
+    OCTEZ_CLIENT_DIR="${OCTEZ_CLIENT_DIR}_rollup"
+    # Wipe dirs eventually:
+    if [[ $WIPE_ROLLUP_NODE_OCTEZ_CLIENT_DIR == *"YES"* ]] && [[ -d "$OCTEZ_CLIENT_DIR" ]]; then
+      cd $OCTEZ_CLIENT_DIR && rm -rf *
+    fi
+    # Create dirs:
+    if [[ ! -d "$OCTEZ_CLIENT_DIR" ]]; then mkdir -p $OCTEZ_CLIENT_DIR ;fi
+    ls -last $OCTEZ_CLIENT_DIR
+    # Import addr:
+    set +x && source /scripts/import-addresses.sh 2>&1 >/dev/null ; set -x
+    ls -last ${ROLLUP_IMPORT_DIR}/*
+    if [[ ! -d "$SHARED_VOLUME_REVEAL_DATA_DIR" ]]; then mkdir -p $SHARED_VOLUME_REVEAL_DATA_DIR ;fi
+    # manual copy of the wasm_2_0_0 dir into the volume that is shared with observer1:
+    if [[ "$FORCE_RE_IMPORT" == *"YES"* ]]; then
+      cd $SHARED_VOLUME_REVEAL_DATA_DIR && rm -rf *
+      cp -r /mounted_volume/rollup_workdir/rollup/wasm_2_0_0 $SHARED_VOLUME_REVEAL_DATA_DIR
+    fi
+    ls -last $SHARED_VOLUME_REVEAL_DATA_DIR/* ; ls -last $SHARED_VOLUME_REVEAL_DATA_DIR/../
+    ROLLUP_NODE_DIR="$SHARED_VOLUME_REVEAL_DATA_DIR"
+    KERNEL=$(cat ${ROLLUP_IMPORT_DIR}/installer.hex)
+    # About sr1:
+    SR_NAME="myrollup"
+    ROLLUP_ADDRESS=$(octez-client -d $OCTEZ_CLIENT_DIR -E "$TEZOS_RPC" originate smart rollup $SR_NAME from ${ROLLUP_OPERATOR} of kind wasm_2_0_0 of type unit with kernel "$KERNEL" --burn-cap 999 | grep "Address:" | awk '{print $2}')
+    echo "Newly created SOR_ADDR: ${ROLLUP_ADDRESS}"
+    # Run the rl node
+    export TEZOS_LOG='* -> info'
+    octez-smart-rollup-node-alpha -d ${OCTEZ_CLIENT_DIR} -E ${TEZOS_RPC} run operator for "${ROLLUP_ADDRESS}" with operators "${ROLLUP_OPERATOR}" --data-dir ${ROLLUP_NODE_DIR} --rpc-addr 0.0.0.0 --rpc-port 8932

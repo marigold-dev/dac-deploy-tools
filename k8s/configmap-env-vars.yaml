@@ -1,0 +1,47 @@
+# Env vars and some feature toggle flags.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dac-node-env-vars-configmap
+data:
+# common
+  OCTEZ_CLIENT_DIR: "/mounted_volume/dac/client"
+  TEZOS_RPC: "http://tezos-node-ghostnet.tezos-ghostnet.svc:8732"
+  ALIAS_MEMBER_1: "member1"
+  ALIAS_MEMBER_2: "member2"
+  ALIAS_ROLLUP_OPERATOR: "rollup_operator"
+# coordinator
+  WIPE_COORDINATOR_DIR: "NO" # put 'YES' if you want to remove that storage before starting up
+  WIPE_COORDINATOR_REVEAL_DATA_DIR: "NO"
+  WIPE_COORDINATOR_OCTEZ_CLIENT_DIR: "YES"
+  COORDINATOR_DIR: "/mounted_volume/dac/coordinator"
+  COORDINATOR_REVEAL_DATA_DIR: "/mounted_volume_reveals/dac/coordinator/reveals"
+# members1
+  WIPE_MEMBER_1_REVEAL_DATA_DIR: "NO"
+  WIPE_MEMBER_1_DIR: "NO"
+  WIPE_MEMBER_1_OCTEZ_CLIENT_DIR: "YES"
+  MEMBER_1_DIR: "/mounted_volume/dac/member-1"
+  MEMBER_1_REVEAL_DATA_DIR: "/mounted_volume_reveals/dac/member-1/reveals"
+# members2
+  WIPE_MEMBER_2_REVEAL_DATA_DIR: "NO"
+  WIPE_MEMBER_2_DIR: "NO"
+  WIPE_MEMBER_2_OCTEZ_CLIENT_DIR: "YES"
+  MEMBER_2_DIR: "/mounted_volume/dac/member-2"
+  MEMBER_2_REVEAL_DATA_DIR: "/mounted_volume_reveals/dac/member-2/reveals"
+# observer1
+  WIPE_OBSERVER_1_REVEAL_DATA_DIR: "NO"
+  WIPE_OBSERVER_1_DIR: "NO"
+  WIPE_OBSERVER_1_OCTEZ_CLIENT_DIR: "YES"
+  OBSERVER_1_DIR: "/mounted_volume/dac/observer-1"
+  OBSERVER_1_REVEAL_DATA_DIR: "/mounted_volume_reveals/dac/soru/wasm_2_0_0"
+# observer2
+  WIPE_OBSERVER_2_REVEAL_DATA_DIR: "NO"
+  WIPE_OBSERVER_2_DIR: "NO"
+  WIPE_OBSERVER_2_OCTEZ_CLIENT_DIR: "YES"
+  OBSERVER_2_DIR: "/mounted_volume/dac/observer-2"
+  OBSERVER_2_REVEAL_DATA_DIR: "/mounted_volume_reveals/dac/soru/wasm_2_0_0"
+# rollup
+  FORCE_RE_IMPORT: "NO" # put 'YES' if you want to force re-impoprting the /rollup dir.
+  ROLLUP_IMPORT_DIR: "/mounted_volume/rollup_workdir/rollup"
+  WIPE_ROLLUP_NODE_OCTEZ_CLIENT_DIR: "YES"
+  SHARED_VOLUME_REVEAL_DATA_DIR: "/mounted_volume_shared/dac/soru"

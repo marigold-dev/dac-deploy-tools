@@ -1,0 +1,123 @@
+# a dummy rollup kernel node that displays the content of a payload
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dac-rollup
+spec:
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: dac-rollup
+  template:
+    metadata:
+      labels:
+        app: dac-rollup
+    spec:
+      initContainers:
+      - name: import # This container is to import /rollup dir that contains the compiled kernel (docker image actually contains the kernel)
+        image: ghcr.io/marigold-dev/dac-initcontainer-import:2023-06-30T10-41-15-3307ad8
+        env:
+        - name: FORCE_RE_IMPORT
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: FORCE_RE_IMPORT # put 'YES' if you want to force re-importing the /rollup dir.
+        volumeMounts:
+        - name: rollup-import-volume
+          mountPath: /mounted_volume/rollup_workdir
+          readOnly: false
+      containers:
+      - name: node # This container runs the rollup-node
+        # image: tezos/tezos:v17.1
+        image: ghcr.io/marigold-dev/dac-baseimage:master_a78b70c7_20230724101956
+        command: ["/bin/bash", "/scripts/rollup.sh"]
+        env:
+        - name: ROLLUP_IMPORT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ROLLUP_IMPORT_DIR
+        - name: FORCE_RE_IMPORT
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: FORCE_RE_IMPORT # put 'YES' if you want to force re-importing the /rollup dir.
+        - name: FORCE_INIT_THIS_SOR_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: FORCE_INIT_THIS_SOR_ADDR
+        - name: FORCE_ORIGINATE_A_NEW_SOR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: FORCE_ORIGINATE_A_NEW_SOR
+        - name: SHARED_VOLUME_REVEAL_DATA_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: SHARED_VOLUME_REVEAL_DATA_DIR
+        - name: WIPE_ROLLUP_NODE_OCTEZ_CLIENT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_ROLLUP_NODE_OCTEZ_CLIENT_DIR
+        - name: OCTEZ_CLIENT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: OCTEZ_CLIENT_DIR
+        - name: TEZOS_RPC
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: TEZOS_RPC
+        - name: ALIAS_ROLLUP_OPERATOR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_ROLLUP_OPERATOR
+        - name: ALIAS_MEMBER_1
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_MEMBER_1
+        - name: ALIAS_MEMBER_2
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_MEMBER_2
+        ports:
+        - containerPort: 8932
+        resources:
+          limits:
+            cpu: 600m
+            memory: 2Gi
+          requests:
+            cpu: 90m
+            memory: 380Mi
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        volumeMounts:
+        - name: rollup-import-volume
+          mountPath: /mounted_volume/rollup_workdir
+          readOnly: false
+        # this volume is shared with the observer1 node:
+        - name: rollup-observer-shared-volume
+          mountPath: /mounted_volume_shared/dac/
+          readOnly: false
+        - name: dac-scripts-volume
+          mountPath: /scripts
+      volumes:
+      - name: rollup-import-volume
+        persistentVolumeClaim:
+          claimName: dac-rollup-import-volume
+      - name: dac-scripts-volume
+        configMap:
+          name: dac-scripts-configmap
+      - name: rollup-observer-shared-volume
+        persistentVolumeClaim:
+          claimName: dac-rollup-observer-shared-volume

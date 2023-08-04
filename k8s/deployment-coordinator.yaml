@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dac-coordinator
+spec:
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: dac-coordinator
+  template:
+    metadata:
+      labels:
+        app: dac-coordinator
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: coordinator
+        image: ghcr.io/marigold-dev/dac-baseimage:master_a78b70c7_20230724101956        
+        command: ["/bin/bash", "/scripts/coordinator.sh"]
+        env:
+        - name: WIPE_COORDINATOR_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_COORDINATOR_DIR
+        - name: WIPE_COORDINATOR_REVEAL_DATA_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_COORDINATOR_REVEAL_DATA_DIR
+        - name: WIPE_COORDINATOR_OCTEZ_CLIENT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: WIPE_COORDINATOR_OCTEZ_CLIENT_DIR
+        - name: OCTEZ_CLIENT_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: OCTEZ_CLIENT_DIR
+        - name: COORDINATOR_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: COORDINATOR_DIR
+        - name: COORDINATOR_REVEAL_DATA_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: COORDINATOR_REVEAL_DATA_DIR
+        - name: TEZOS_RPC
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: TEZOS_RPC
+        - name: ALIAS_ROLLUP_OPERATOR
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_ROLLUP_OPERATOR
+        - name: ALIAS_MEMBER_1
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_MEMBER_1
+        - name: ALIAS_MEMBER_2
+          valueFrom:
+            configMapKeyRef:
+              name: dac-node-env-vars-configmap
+              key: ALIAS_MEMBER_2
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 11100
+          initialDelaySeconds: 40
+          periodSeconds: 20
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+        ports:
+        - containerPort: 11100
+          protocol: TCP
+          name: rpc
+        volumeMounts:
+        - name: dac-coordinator-dir-volume
+          mountPath: /mounted_volume/dac/coordinator
+          readOnly: false
+        - name: dac-coordinator-reveal-dir-volume
+          mountPath: /mounted_volume/dac/coordinator/reveals
+          readOnly: false
+        - name: dac-scripts-configmap
+          mountPath: /scripts
+          readOnly: true
+      volumes:
+      - name: dac-coordinator-dir-volume
+        persistentVolumeClaim:
+          claimName: dac-coordinator-dir-volume
+      - name: dac-coordinator-reveal-dir-volume
+        persistentVolumeClaim:
+          claimName: dac-coordinator-reveal-dir-volume
+      - name: dac-scripts-configmap
+        configMap:
+          name: dac-scripts-configmap

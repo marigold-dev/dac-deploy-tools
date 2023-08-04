@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dac-ghostnet
+
+resources:
+  - ./pvc-coordinator.yaml
+  - ./pvc-members.yaml
+  - ./pvc-observers.yaml
+  - ./pvc-node.yaml
+  - ./configmap-env-vars.yaml
+  - ./configmap-scripts.yaml
+  - ./ingress-coordinator.yml
+  - ./ingress-member1.yml
+  - ./ingress-member2.yml
+  - ./ingress-observer1.yml
+  - ./ingress-observer2.yml
+  - ./ingress-rollup.yml
+  - ./deployment-rollup.yaml
+  - ./deployment-coordinator.yaml
+  - ./deployment-member1.yaml
+  - ./deployment-member2.yaml
+  - ./deployment-observer1.yaml
+  - ./deployment-observer2.yaml
